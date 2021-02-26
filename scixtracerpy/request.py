@@ -12,7 +12,8 @@ Request
 import os
 import re
 from .factory import requestServices
-from .containers import Experiment
+from .containers import (Experiment, RawData, ProcessedData, Dataset,
+                         METADATA_TYPE_RAW)
 
 
 class Request:
@@ -190,7 +191,7 @@ class Request:
         value_position: int
             Position of the value to extract with respect to the separators
         """
-        
+
         experiment.set_tag(tag, False)
         self.update_experiment(experiment)
         _rawdataset = self.get_rawdataset(experiment)
@@ -203,3 +204,144 @@ class Request:
                 value = splited_name[value_position]
             _rawdata.set_tag(tag, value)
             self.update_rawdata(_rawdata)
+
+    def get_rawdata(self, uri):
+        """Read a raw data from the database
+
+        Parameters
+        ----------
+        uri: str
+            URI if the rawdata
+
+        Returns
+        -------
+        RawData object containing the raw data metadata
+        """
+
+        return self.service.get_rawdata(uri)
+
+    def update_rawdata(self, rawdata):
+        """Read a raw data from the database
+
+        Parameters
+        ----------
+        rawdata: RawData
+            Container with the rawdata metadata
+        """
+
+        self.service.update_rawdata(rawdata)
+
+    def get_processeddata(self, uri):
+        """Read a processed data from the database
+
+        Parameters
+        ----------
+        uri: str
+            URI if the processeddata
+
+        Returns
+        -------
+        ProcessedData object containing the raw data metadata
+        """
+
+        return self.service.get_processeddata(uri)
+
+    def update_processeddata(self, processeddata):
+        """Read a processed data from the database
+
+        Parameters
+        ----------
+        processeddata: ProcessedData
+            Container with the processeddata metadata
+        """
+
+        self.service.update_rawdata(processeddata)
+
+    def get_dataset_from_uri(self, uri):
+        """Read a dataset from the database using it URI
+
+        Parameters
+        ----------
+        uri: str
+            URI if the dataset
+
+        Returns
+        -------
+        Dataset object containing the dataset metadata
+        """
+
+        return self.service.get_processeddata(uri)
+
+    def update_dataset(self, dataset):
+        """Read a processed data from the database
+
+        Parameters
+        ----------
+        dataset: Dataset
+            Container with the dataset metadata
+
+        """
+        self.service.update_rawdata(dataset)
+
+    def get_rawdataset(self, experiment):
+        """Read the raw dataset from the database
+
+        Parameters
+        ----------
+        experiment: Experiment
+            Container of the experiment metadata
+
+        Returns
+        -------
+        Dataset object containing the dataset metadata
+
+        """
+        return self.get_dataset_from_uri(experiment.rawdataset_uri)
+
+    def get_parent(self, processeddata):
+        """Get the metadata of the parent data.
+
+        The parent data can be a RawData or a ProcessedData
+        depending on the process chain
+
+        Parameters
+        ----------
+        processeddata: ProcessedData
+            Container of the processed data URI
+
+        Returns
+        -------
+        parent
+            Parent data (RawData or ProcessedData)
+
+        """
+
+        if len(processeddata.inputs) > 0:
+            if processeddata.inputs[0].type == METADATA_TYPE_RAW():
+                return self.get_rawdata(processeddata.inputs[0].uri)
+            else:
+                return self.get_processeddata(processeddata.inputs[0].uri)
+        return None
+
+    def get_origin(self, processed_data):
+        """Get the first metadata of the parent data.
+
+        The origin data is a RawData. It is the first data that have
+        been seen in the raw dataset
+
+        Parameters
+        ----------
+        processeddata: ProcessedData
+            Container of the processed data URI
+
+        Returns
+        -------
+        the origin data in a RawData object
+
+        """
+        if len(processed_data.inputs) > 0:
+            if processed_data.inputs[0].type == METADATA_TYPE_RAW():
+                return self.get_rawdata(processed_data.inputs[0].uri)
+            else:
+                return self.get_origin(
+                           self.get_processeddata(processed_data.inputs[0].uri))
