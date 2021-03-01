@@ -11,6 +11,12 @@ LocalRequest
 
 import os
 import json
+from shutil import copyfile
+
+from .utils import SciXtracerError
+from .containers import (METADATA_TYPE_RAW, METADATA_TYPE_PROCESSED, RawData,
+                         ProcessedData, Dataset,
+                         Experiment, Run, ProcessedDataInputContainer)
 
 
 class RequestLocalServiceBuilder:
@@ -44,7 +50,143 @@ class LocalRequestService:
         with open(md_uri, 'w') as outfile:
             json.dump(metadata, outfile, indent=4)
 
-    def create_experiment(self, name, author, date='now', tag_keys=[],
+    @staticmethod
+    def md_file_path(md_uri):
+        """get metadata file directory path
+
+        Parameters
+        ----------
+        md_uri: str
+            URI of the metadata
+
+        Returns
+        ----------
+        str
+            The name of the metadata file directory path
+        """
+        abspath = os.path.abspath(md_uri)
+        return os.path.dirname(abspath)
+
+    @staticmethod
+    def relative_path(file: str, reference_file: str):
+        """convert file absolute path to a relative path wrt reference_file
+        Parameters
+        ----------
+        reference_file
+            Reference file
+        file
+            File to get absolute path
+        Returns
+        -------
+        relative path of uri wrt md_uri
+        """
+        separator = os.sep
+        file = file.replace(separator + separator, separator)
+        reference_file = reference_file.replace(separator + separator,
+                                                separator)
+
+        common_part = ''
+        for i in range(len(file)):
+            common_part = reference_file[0:i]
+            if common_part not in file:
+                break
+
+        last_separator = common_part.rfind(separator)
+
+        short_reference_file = reference_file[last_separator + 1:]
+
+        number_of_sub_folder = short_reference_file.count(separator)
+        short_file = file[last_separator + 1:]
+        for i in range(number_of_sub_folder):
+            short_file = '..' + separator + short_file
+
+        return short_file
+
+    @staticmethod
+    def absolute_path(file: str, reference_file: str):
+        """convert file relative to reference_file into an absolute path
+        Parameters
+        ----------
+        reference_file
+            Reference file
+        file
+            File to get absolute path
+        Returns
+        -------
+        relative path of uri wrt md_uri
+        """
+        if os.path.isfile(file):
+            return os.path.abspath(file)
+
+        separator = os.sep
+        last_separator = reference_file.rfind(separator)
+        canonical_path = reference_file[0: last_separator + 1]
+        return LocalRequestService.simplify_path(canonical_path + file)
+
+    @staticmethod
+    def simplify_path(path: str) -> str:
+        """Simplify a path by removing ../"""
+
+        if path.find('..') < 0:
+            return path
+
+        separator = os.sep
+        keep_folders = path.split(separator)
+
+        found = True
+        while found:
+            pos = -1
+            folders = keep_folders
+            for i in range(len(folders)):
+                if folders[i] == '..':
+                    pos = i
+                    break
+            if pos > -1:
+                keep_folders = []
+                for i in range(0, pos - 1):
+                    keep_folders.append(folders[i])
+                for i in range(pos + 1, len(folders)):
+                    keep_folders.append(folders[i])
+            else:
+                found = False
+
+        clean_path = ''
+        for i in range(len(keep_folders)):
+            clean_path += keep_folders[i]
+            if i < len(keep_folders) - 1:
+                clean_path += separator
+        return clean_path
+
+    @staticmethod
+    def normalize_path_sep(path: str) -> str:
+        """Normalize the separators of a path
+
+        Parameters
+        ----------
+        path: str
+            Path to normalize
+
+        Returns
+        -------
+        path normalized
+        """
+        p1 = path.replace('/', os.sep).replace('\\\\', os.sep)
+        return p1
+
+    @staticmethod
+    def to_unix_path(path: str) -> str:
+        """Transform a path to unix path
+        Parameters
+        ----------
+        path: str
+            Path to unixify
+        Returns
+        -------
+        Path with unix separator
+        """
+        return path.replace('\\\\', '/').replace('\\', '/')
+
+    def create_experiment(self, name, author, date='now', tag_keys=None,
                           destination=''):
         """Create a new experiment
 
@@ -67,14 +209,63 @@ class LocalRequestService:
         Experiment container with the experiment metadata
         """
 
-        return None
+        if tag_keys is None:
+            tag_keys = []
+        container = Experiment()
+        container.name = name
+        container.author = author
+        container.date = date
+        container.tag_keys = tag_keys
 
-    def get_experiment(self, uri):
+        # check the destination dir
+        uri = os.path.abspath(destination)
+        if not os.path.exists(uri):
+            raise SciXtracerError(
+                'Cannot create Experiment: the destination '
+                'directory does not exists'
+            )
+
+        uri = os.path.abspath(uri)
+
+        # create the experiment directory
+        filtered_name = name.replace(' ', '')
+        experiment_path = os.path.join(uri, filtered_name)
+        if not os.path.exists(experiment_path):
+            os.mkdir(experiment_path)
+        else:
+            raise SciXtracerError(
+                'Cannot create Experiment: the experiment '
+                'directory already exists'
+            )
+
+        # create an empty raw dataset
+        rawdata_path = os.path.join(experiment_path, 'data')
+        rawdataset_md_url = os.path.join(rawdata_path, 'rawdataset.md.json')
+        container.rawdataset = rawdataset_md_url
+        if os.path.exists(experiment_path):
+            os.mkdir(rawdata_path)
+        else:
+            raise SciXtracerError(
+                'Cannot create Experiment raw dataset: the experiment '
+                'directory does not exists'
+            )
+
+        rawdataset = Dataset()
+        rawdataset.md_uri = rawdataset_md_url
+        rawdataset.name = 'data'
+        self.update_dataset(rawdataset)
+
+        # save the experiment.md.json metadata file
+        container.md_uri = os.path.join(experiment_path, 'experiment.md.json')
+        self.update_experiment(container)
+        return container
+
+    def get_experiment(self, md_uri):
         """Read an experiment from the database
 
         Parameters
         ----------
-        uri: str
+        md_uri: str
             URI of the experiment. For local use case, the URI is either the
             path of the experiment directory, or the path of the
             experiment.md.json file
@@ -84,7 +275,27 @@ class LocalRequestService:
         Experiment container with the experiment metadata
         """
 
-        return None
+        md_uri = os.path.abspath(md_uri)
+        if os.path.isfile(md_uri):
+            metadata = self._read_json(md_uri)
+            container = Experiment()
+            container.md_uri = md_uri
+            container.name = metadata['information']['name']
+            container.author = metadata['information']['author']
+            container.date = metadata['information']['date']
+            container.rawdataset = LocalRequestService.absolute_path(
+                LocalRequestService.normalize_path_sep(metadata['rawdataset']),
+                md_uri)
+            for dataset in metadata['processeddatasets']:
+                container.processeddatasets_uris.append(
+                    LocalRequestService.absolute_path(
+                        LocalRequestService.normalize_path_sep(dataset),
+                        md_uri))
+            for tag in metadata['tags']:
+                container.tag_keys.append(tag)
+            return container
+        raise SciXtracerError('Cannot find the experiment metadata from the '
+                              'given URI')
 
     def update_experiment(self, experiment):
         """Write an experiment to the database
@@ -95,7 +306,24 @@ class LocalRequestService:
             Container of the experiment metadata
         """
 
-        return None
+        md_uri: str = os.path.abspath(experiment.md_uri)
+        metadata = dict()
+        metadata['information'] = {}
+        metadata['information']['name'] = experiment.name
+        metadata['information']['author'] = experiment.author
+        metadata['information']['date'] = experiment.date
+        metadata['rawdataset'] = LocalRequestService.to_unix_path(
+            LocalRequestService.relative_path(experiment.rawdataset_uri,
+                                              md_uri))
+        metadata['processeddatasets'] = []
+        for dataset in experiment.processeddatasets_uris:
+            metadata['processeddatasets'].append(
+                LocalRequestService.to_unix_path(
+                    LocalRequestService.relative_path(dataset, md_uri)))
+        metadata['tags'] = []
+        for tag in experiment.tag_keys:
+            metadata['tags'].append(tag)
+        self._write_json(metadata, md_uri)
 
     def import_data(self, experiment, data_path, name, author, format_,
                     date='now', tags=dict, copy=True):
@@ -129,12 +357,46 @@ class LocalRequestService:
 
         """
 
-    def get_rawdata(self, uri):
+        rawdataset_uri = os.path.abspath(experiment.rawdataset_uri)
+        data_dir_path = os.path.dirname(rawdataset_uri)
+
+        # create the new data uri
+        data_base_name = os.path.basename(data_path)
+        filtered_name = data_base_name.replace(' ', '')
+        filtered_name, ext = os.path.splitext(filtered_name)
+        md_uri = os.path.join(data_dir_path, filtered_name + '.md.json')
+
+        # create the container
+        metadata = RawData()
+        metadata.md_uri = md_uri
+        metadata.name = name
+        metadata.author = author
+        metadata.format = format_
+        metadata.date = date
+        metadata.tags = tags
+
+        # import data
+        if copy:
+            copied_data_path = os.path.join(data_dir_path, data_base_name)
+            copyfile(data_path, copied_data_path)
+            metadata.uri = copied_data_path
+        else:
+            metadata.uri = data_path
+        self.update_rawdata(metadata)
+
+        # add data to experiment RawDataSet
+        rawdataset_container = self.get_dataset(rawdataset_uri)
+        rawdataset_container.uris.append(md_uri)
+        self.update_dataset(rawdataset_container)
+
+        return md_uri
+
+    def get_rawdata(self, md_uri):
         """Read a raw data from the database
 
         Parameters
         ----------
-        uri: str
+        md_uri: str
             URI if the rawdata
 
         Returns
@@ -142,7 +404,25 @@ class LocalRequestService:
         RawData object containing the raw data metadata
         """
 
-        return None
+        md_uri = os.path.abspath(md_uri)
+        if os.path.isfile(md_uri) and md_uri.endswith('.md.json'):
+            metadata = LocalRequestService._read_json(md_uri)
+            container = RawData()
+            container.md_uri = md_uri
+            container.type = metadata['origin']['type']
+            container.name = metadata['common']['name']
+            container.author = metadata['common']['author']
+            container.date = metadata['common']['date']
+            container.format = metadata['common']['format']
+            # copy the url if absolute, append md_uri path otherwise
+            container.uri = LocalRequestService.absolute_path(
+                LocalRequestService.normalize_path_sep(
+                    metadata['common']['url']), md_uri)
+            if 'tags' in metadata:
+                for key in metadata['tags']:
+                    container.tags[key] = metadata['tags'][key]
+            return container
+        raise SciXtracerError('Metadata file format not supported')
 
     def update_rawdata(self, rawdata):
         """Read a raw data from the database
@@ -153,14 +433,32 @@ class LocalRequestService:
             Container with the rawdata metadata
         """
 
-        pass
+        md_uri = os.path.abspath(rawdata.md_uri)
+        metadata = dict()
 
-    def get_processeddata(self, uri):
+        metadata['origin'] = dict()
+        metadata['origin']['type'] = METADATA_TYPE_RAW()
+
+        metadata['common'] = dict()
+        metadata['common']['name'] = rawdata.name
+        metadata['common']['author'] = rawdata.author
+        metadata['common']['date'] = rawdata.date
+        metadata['common']['format'] = rawdata.format
+        metadata['common']['url'] = LocalRequestService.to_unix_path(
+            LocalRequestService.relative_path(rawdata.uri, md_uri))
+
+        metadata['tags'] = dict()
+        for key in rawdata.tags:
+            metadata['tags'][key] = rawdata.tags[key]
+
+        self._write_json(metadata, md_uri)
+
+    def get_processeddata(self, md_uri):
         """Read a processed data from the database
 
         Parameters
         ----------
-        uri: str
+        md_uri: str
             URI if the processeddata
 
         Returns
@@ -168,7 +466,42 @@ class LocalRequestService:
         ProcessedData object containing the raw data metadata
         """
 
-        return None
+        md_uri = os.path.abspath(md_uri)
+        if os.path.isfile(md_uri) and md_uri.endswith('.md.json'):
+            metadata = self._read_json(md_uri)
+            container = ProcessedData()
+            container.md_uri = md_uri
+            container.name = metadata['common']['name']
+            container.author = metadata['common']['author']
+            container.date = metadata['common']['date']
+            container.format = metadata['common']['format']
+            container.uri = LocalRequestService.absolute_path(
+                LocalRequestService.normalize_path_sep(
+                    metadata['common']['url']), md_uri)
+            # origin run
+            container.run_uri = LocalRequestService.absolute_path(
+                LocalRequestService.normalize_path_sep(
+                    metadata['origin']['runurl']), md_uri)
+            # origin input
+            for input_ in metadata['origin']['inputs']:
+                container.inputs.append(
+                    ProcessedDataInputContainer(
+                        input_['name'],
+                        LocalRequestService.absolute_path(
+                            LocalRequestService.normalize_path_sep(
+                                input_['url']), md_uri),
+                        input_['type'],
+                    )
+                )
+            # origin
+            if 'name' in metadata['origin']['output']:
+                container.output['name'] = metadata['origin']['output']["name"]
+            if 'label' in metadata['origin']['output']:
+                container.output['label'] = \
+                    metadata['origin']['output']['label']
+
+            return container
+        raise SciXtracerError('Metadata file format not supported')
 
     def update_processeddata(self, processeddata):
         """Read a processed data from the database
@@ -179,14 +512,47 @@ class LocalRequestService:
             Container with the processeddata metadata
         """
 
-        pass
+        md_uri = os.path.abspath(processeddata.md_uri)
+        metadata = dict()
+        # common
+        metadata['common'] = dict()
+        metadata['common']['name'] = processeddata.name
+        metadata['common']['author'] = processeddata.author
+        metadata['common']['date'] = processeddata.date
+        metadata['common']['format'] = processeddata.format
+        metadata['common']['url'] = LocalRequestService.to_unix_path(
+            LocalRequestService.relative_path(processeddata.uri, md_uri))
+        # origin type
+        metadata['origin'] = dict()
+        metadata['origin']['type'] = METADATA_TYPE_PROCESSED()
+        # run url
+        metadata['origin']['runurl'] = LocalRequestService.to_unix_path(
+            LocalRequestService.relative_path(processeddata.run_uri, md_uri))
+        # origin inputs
+        metadata['origin']['inputs'] = list()
+        for input_ in processeddata.inputs:
+            metadata['origin']['inputs'].append(
+                {
+                    'name': input_.name,
+                    'url': LocalRequestService.to_unix_path(
+                        LocalRequestService.relative_path(input_.uri, md_uri)),
+                    'type': input_.type,
+                }
+            )
+        # origin ouput
+        metadata['origin']['output'] = {
+            'name': processeddata.output['name'],
+            'label': processeddata.output['label'],
+        }
 
-    def get_dataset(self, uri):
+        self._write_json(metadata, md_uri)
+
+    def get_dataset(self, md_uri):
         """Read a dataset from the database using it URI
 
         Parameters
         ----------
-        uri: str
+        md_uri: str
             URI if the dataset
 
         Returns
@@ -194,7 +560,19 @@ class LocalRequestService:
         Dataset object containing the dataset metadata
         """
 
-        return None
+        md_uri = os.path.abspath(md_uri)
+        if os.path.isfile(md_uri) and md_uri.endswith('.md.json'):
+            metadata = self._read_json(md_uri)
+            container = Dataset()
+            container.md_uri = md_uri
+            container.name = metadata['name']
+            for uri in metadata['urls']:
+                container.uris.append(
+                    LocalRequestService.absolute_path(
+                        LocalRequestService.normalize_path_sep(uri), md_uri))
+
+            return container
+        raise SciXtracerError('Dataset not found')
 
     def update_dataset(self, dataset):
         """Read a processed data from the database
@@ -205,7 +583,14 @@ class LocalRequestService:
             Container with the dataset metadata
         """
 
-        pass
+        md_uri = os.path.abspath(dataset.md_uri)
+        metadata = dict()
+        metadata['name'] = dataset.name
+        metadata['urls'] = list()
+        for uri in dataset.uris:
+            metadata['urls'].append(LocalRequestService.to_unix_path(
+                LocalRequestService.relative_path(uri, md_uri)))
+        self._write_json(metadata, md_uri)
 
     def create_dataset(self, experiment, dataset_name):
         """Create a processed dataset in an experiment
@@ -223,7 +608,29 @@ class LocalRequestService:
 
         """
 
-        return None
+        # create the dataset metadata
+        experiment_md_uri = os.path.abspath(experiment.md_uri)
+        experiment_dir = LocalRequestService.md_file_path(experiment_md_uri)
+        dataset_dir = os.path.join(experiment_dir, dataset_name)
+        if not os.path.isdir(dataset_dir):
+            os.mkdir(dataset_dir)
+        processeddataset_uri = os.path.join(
+            experiment_dir, dataset_name, 'processeddataset.md.json'
+        )
+        container = Dataset()
+        container.md_uri = processeddataset_uri
+        container.name = dataset_name
+        self.update_dataset(container)
+
+        print("experiment at:", experiment_md_uri)
+        print("create the processed dataset at:", processeddataset_uri)
+
+        # add the dataset to the experiment
+        experiment.processeddatasets_uris.append(
+            LocalRequestService.to_unix_path(processeddataset_uri))
+        self.update_experiment(experiment)
+
+        return container
 
     def create_run(self, dataset, run_info):
         """Create a new run metadata
@@ -241,7 +648,53 @@ class LocalRequestService:
         Run object with the metadata and the new created md_uri
         """
 
-        return None
+        # create run URI
+        dataset_md_uri = os.path.abspath(dataset.md_uri)
+        dataset_dir = LocalRequestService.md_file_path(dataset_md_uri)
+        run_md_file_name = "run.md.json"
+        runid_count = 0
+        while os.path.isfile(os.path.join(dataset_dir, run_md_file_name)):
+            runid_count += 1
+            run_md_file_name = "run_" + str(runid_count) + ".md.json"
+        run_uri = os.path.join(dataset_dir, run_md_file_name)
+
+        # write run
+        run_info.md_uri = run_uri
+        self._write_run(run_info)
+        return run_info
+
+    def _write_run(self, run):
+        """Write a run metadata to the data base
+        Parameters
+        ----------
+        run
+            Object containing the run metadata
+        """
+
+        metadata = dict()
+
+        metadata['process'] = {}
+        metadata['process']['name'] = run.process_name
+        metadata['process']['url'] = LocalRequestService.to_unix_path(
+            run.process_uri)
+        metadata['processeddataset'] = run.processeddataset
+        metadata['inputs'] = []
+        for input_ in run.inputs:
+            metadata['inputs'].append(
+                {
+                    'name': input_.name,
+                    'dataset': input_.dataset,
+                    'query': input_.query,
+                    'origin_output_name': input_.origin_output_name,
+                }
+            )
+        metadata['parameters'] = []
+        for parameter in run.parameters:
+            metadata['parameters'].append(
+                {'name': parameter.name, 'value': parameter.value}
+            )
+
+        self._write_json(metadata, run.md_uri)
 
     def create_data(self, dataset, processed_data):
         """Create a new processed data for a given dataset
@@ -259,4 +712,17 @@ class LocalRequestService:
         ProcessedData object with the metadata and the new created md_uri
         """
 
-        return None
+        md_uri = os.path.abspath(dataset.md_uri)
+        dataset_dir = LocalRequestService.md_file_path(md_uri)
+
+        # create the data metadata
+        data_md_file = os.path.join(dataset_dir, processed_data.name
+                                    + '.md.json')
+        processed_data.md_uri = data_md_file
+        processed_data.uri = os.path.join(dataset_dir, processed_data.name + '.'
+                                          + processed_data.format)
+        self.update_processeddata(processed_data)
+
+        # add the data to the dataset
+        dataset.uris.append(data_md_file)
+        self.update_dataset(dataset)
