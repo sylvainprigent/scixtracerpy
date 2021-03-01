@@ -272,7 +272,7 @@ class Request:
         Dataset object containing the dataset metadata
         """
 
-        return self.service.get_processeddata(uri)
+        return self.service.get_dataset(uri)
 
     def update_dataset(self, dataset):
         """Read a processed data from the database
@@ -281,9 +281,9 @@ class Request:
         ----------
         dataset: Dataset
             Container with the dataset metadata
-
         """
-        self.service.update_rawdata(dataset)
+
+        self.service.update_dataset(dataset)
 
     def get_rawdataset(self, experiment):
         """Read the raw dataset from the database
