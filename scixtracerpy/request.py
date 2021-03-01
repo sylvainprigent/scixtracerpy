@@ -465,6 +465,21 @@ class Request:
 
         return self.service.create_run(dataset, run_info)
 
+    def get_run(self, uri):
+        """Read a run metadata from the data base
+
+        Parameters
+        ----------
+        uri
+            URI of the run entry in the database
+
+        Returns
+        -------
+        Run: object containing the run metadata
+        """
+
+        return self.service.get_run(uri)
+
     def create_data(self, dataset, processed_data):
         """Create a new processed data for a given dataset
 

@@ -16,7 +16,8 @@ from shutil import copyfile
 from .utils import SciXtracerError
 from .containers import (METADATA_TYPE_RAW, METADATA_TYPE_PROCESSED, RawData,
                          ProcessedData, Dataset,
-                         Experiment, Run, ProcessedDataInputContainer)
+                         Experiment, Run, ProcessedDataInputContainer,
+                         RunInputContainer, RunParameterContainer)
 
 
 class RequestLocalServiceBuilder:
@@ -662,6 +663,44 @@ class LocalRequestService:
         run_info.md_uri = run_uri
         self._write_run(run_info)
         return run_info
+
+    def get_run(self, md_uri):
+        """Read a run metadata from the data base
+
+        Parameters
+        ----------
+        md_uri
+            URI of the run entry in the database
+
+        Returns
+        -------
+        Run: object containing the run metadata
+        """
+
+        md_uri = os.path.abspath(md_uri)
+        if os.path.isfile(md_uri):
+            metadata = self._read_json(md_uri)
+            container = Run()
+            container.md_uri = md_uri
+            container.process_name = metadata['process']['name']
+            container.process_uri = LocalRequestService.normalize_path_sep(
+                metadata['process']['url'])
+            container.processeddataset = metadata['processeddataset']
+            for input_ in metadata['inputs']:
+                container.inputs.append(
+                    RunInputContainer(
+                        input_['name'],
+                        input_['dataset'],
+                        input_['query'],
+                        input_['origin_output_name'],
+                    )
+                )
+            for parameter in metadata['parameters']:
+                container.parameters.append(
+                    RunParameterContainer(parameter['name'], parameter['value'])
+                )
+            return container
+        raise SciXtracerError('Run not found')
 
     def _write_run(self, run):
         """Write a run metadata to the data base
