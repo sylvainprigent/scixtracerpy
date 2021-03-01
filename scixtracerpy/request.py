@@ -11,9 +11,11 @@ Request
 
 import os
 import re
+from .utils import SciXtracerError
 from .factory import requestServices
 from .containers import (Experiment, RawData, ProcessedData, Dataset,
                          METADATA_TYPE_RAW)
+from .query import SearchContainer, query_list_single
 
 
 class Request:
@@ -337,11 +339,192 @@ class Request:
         Returns
         -------
         the origin data in a RawData object
-
         """
+
         if len(processed_data.inputs) > 0:
             if processed_data.inputs[0].type == METADATA_TYPE_RAW():
                 return self.get_rawdata(processed_data.inputs[0].uri)
             else:
                 return self.get_origin(
                            self.get_processeddata(processed_data.inputs[0].uri))
+
+    def get_dataset(self, experiment, name):
+        """Query a dataset from it name
+
+        Parameters
+        ----------
+        experiment: Experiment
+            Object containing the experiment metadata
+        name: str
+            Name of the dataset to query
+
+        Returns
+        -------
+        a Dataset containing the dataset metadata. None is return if the dataset
+        is not found
+        """
+
+        if name == 'data':
+            return self.get_dataset_from_uri(experiment.rawdataset_uri)
+        else:
+            for dataset_name in experiment.processeddatasets:
+                pdataset = self.get_dataset_from_uri(dataset_name)
+                if pdataset.name == name:
+                    return pdataset
+        return None
+
+    def get_data(self, dataset, query='', origin_output_name=''):
+        """Query data from a dataset
+
+        Parameters
+        ----------
+        dataset: Dataset
+            Object containing the dataset metadata
+        query
+            String query with the key=value format.
+        origin_output_name
+            Name of the output origin (ex: -o) in the case of ProcessedDataset
+            search
+
+        Returns
+        -------
+        list
+            List of selected data (list of RawData or ProcessedData objects)
+        """
+
+        if len(dataset.uris) < 1:
+            return list()
+
+        # search the dataset
+        queries = re.split(' AND ', query)
+
+        # initially all the raw data are selected
+        first_data = self.get_rawdata(dataset.uris[0])
+        selected_list = []
+        # raw dataset
+        if first_data.origin == METADATA_TYPE_RAW():
+            selected_list = self._rawdata_to_search_containers()
+        # processed dataset
+        else:
+            pre_list = self._processed_data_to_search_container()
+            # remove the data where output origin is not the asked one
+            if origin_output_name != '':
+                for pdata in pre_list:
+                    data = self.get_processeddata(pdata.uri)
+                    if data.output["name"] == origin_output_name:
+                        selected_list.append(pdata)
+            else:
+                selected_list = pre_list
+
+        if query == '':
+            return selected_list
+
+        # run all the AND queries on the preselected dataset
+        for q in queries:
+            selected_list = query_list_single(selected_list, q)
+
+        # convert SearchContainer list to uri list
+        out = []
+        for d in selected_list:
+            out.append(d.uri())
+        return out
+
+    def create_dataset(self, experiment, dataset_name):
+        """Create a processed dataset in an experiment
+
+        Parameters
+        ----------
+        experiment: Experiment
+            Object containing the experiment metadata
+        dataset_name: str
+            Name of the dataset
+
+        Returns
+        -------
+        Dataset object containing the new dataset metadata
+
+        """
+
+        return self.service.create_dataset(experiment, dataset_name)
+
+    def create_run(self, dataset, run_info):
+        """Create a new run metadata
+
+        Parameters
+        ----------
+        dataset: Dataset
+            Object of the dataset metadata
+        run_info: Run
+            Object containing the metadata of the run. md_uri is ignored and
+            created automatically by this method
+
+        Returns
+        -------
+        Run object with the metadata and the new created md_uri
+        """
+
+        return self.service.create_run(dataset, run_info)
+
+    def create_data(self, dataset, processed_data):
+        """Create a new processed data for a given dataset
+
+        Parameters
+        ----------
+        dataset: Dataset
+            Object of the dataset metadata
+        processed_data: ProcessedData
+            Object containing the new processed data. md_uri is ignored and
+            created automatically by this method
+
+        Returns
+        -------
+        ProcessedData object with the metadata and the new created md_uri
+        """
+
+        return self.service.create_data(dataset, processed_data)
+
+    @staticmethod
+    def _rawdata_to_search_container(rawdata):
+        """convert a RawData to SearchContainer
+
+        Parameters
+        ----------
+        rawdata: RawData
+            Object containing the rawdata
+
+        Returns
+        -------
+        SearchContainer object
+        """
+
+        info = SearchContainer()
+        info.data['name'] = rawdata.name
+        info.data["uri"] = rawdata.md_uri
+        info.data['tags'] = rawdata.tags
+        return info
+
+    def _processed_data_to_search_container(self, processeddata):
+        """convert a ProcessedData to SearchContainer
+
+        Parameters
+        ----------
+        processeddata: ProcessedData
+            Object containing the processeddata
+
+        Returns
+        -------
+        SearchContainer object
+        """
+
+        container = None
+        try:
+            origin = self.get_origin(processeddata)
+            if origin is not None:
+                container = self._rawdata_to_search_container(origin)
+            else:
+                container = SearchContainer()
+        except SciXtracerError:
+            container = SearchContainer()
+        container.data['name'] = self.name
+        container.data['uri'] = self.md_uri
+        return container

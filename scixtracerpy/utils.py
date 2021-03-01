@@ -19,6 +19,12 @@ import datetime
 import os
 
 
+class SciXtracerError(Exception):
+    """Raised when an error happen in the metadata database"""
+
+    pass
+
+
 class ProgressObserver:
     """Observer to display or log a process progress
 
