@@ -8,7 +8,7 @@ setuptools.setup(
     version="0.0.1",
     author="Sylvain Prigent",
     author_email="sylvain.prigent@inria.fr",
-    description="write biological data processing pipelines",
+    description="Manage experimental scientific datasets",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/sylvainprigent/scixtracerpy",
