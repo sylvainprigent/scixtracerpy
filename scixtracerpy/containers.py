@@ -34,12 +34,14 @@ class Container:
 
     Attributes
     ----------
-    md_uri
+    md_uri: str
         URI of the metadata in the database or file system depending on backend
-
+    uuid: str
+        Unique identifier of the metadata
     """
-    def __init__(self):
-        self.md_uri = ''
+    def __init__(self, md_uri='', uuid=''):
+        self.md_uri = md_uri
+        self.uuid = uuid
 
 
 class Data(Container):
@@ -148,7 +150,7 @@ class Dataset(Container):
     def __init__(self):
         Container.__init__(self)
         self.name = ''
-        self.uris = list()
+        self.uris = list()  # list of containers
 
 
 class RunParameterContainer:
@@ -217,9 +219,27 @@ class Run(Container):
         Container.__init__(self)
         self.process_name = ''
         self.process_uri = ''
-        self.processeddataset = ''
+        self.processeddataset = None  # Container
         self.parameters = []  # list of RunParameterContainer
         self.inputs = []  # list of RunInputContainer
+
+
+class DatasetInfo:
+    """Contains the info of a dataset
+
+    Attributes
+    ----------
+    name: str
+        Name of the dataset
+    url: str
+        URL of the metadata file
+    uuid: str
+        Unique ID of the dataset
+    """
+    def __init__(self, name, url, uuid):
+        self.name = name
+        self.url = url
+        self.uuid = uuid
 
 
 class Experiment(Container):
@@ -233,9 +253,9 @@ class Experiment(Container):
         Username of the experiment author
     date
         Creation date of the experiment
-    rawdataset_uri:
+    rawdataset:
         URI of the raw dataset
-    processeddatasets_uris
+    processeddatasets
         URIs of the processed datasets
     tag_keys
         List of vocabulary keys used in the experiment
@@ -247,6 +267,6 @@ class Experiment(Container):
         self.name = ''
         self.author = ''
         self.date = ''
-        self.rawdataset_uri = ''
-        self.processeddatasets_uris = []
+        self.rawdataset = None  # DatasetInfo
+        self.processeddatasets = []  # list of DatasetInfo
         self.tag_keys = []

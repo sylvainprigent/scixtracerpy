@@ -11,7 +11,7 @@ Request
 
 import os
 import re
-from .utils import SciXtracerError
+from .utils import SciXtracerError, format_date
 from .factory import requestServices
 from .containers import (Experiment, RawData, ProcessedData, Dataset,
                          METADATA_TYPE_RAW)
@@ -48,8 +48,8 @@ class Request:
         Experiment container with the experiment metadata
         """
 
-        return self.service.create_experiment(name, author,  date, tag_keys,
-                                              destination)
+        return self.service.create_experiment(name, author, format_date(date),
+                                              tag_keys, destination)
 
     def get_experiment(self, uri):
         """Read an experiment from the database
@@ -112,7 +112,7 @@ class Request:
         """
 
         self.service.import_data(experiment, data_path, name, author, format_,
-                                 date, tags, copy)
+                                 format_date(date), tags, copy)
 
     def import_dir(self, experiment, dir_uri, filter_, author, format_, date,
                    copy_data):

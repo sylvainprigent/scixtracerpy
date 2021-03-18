@@ -117,13 +117,23 @@ def serialize_experiment(experiment):
     """
 
     content = 'Experiment:\n'
+    content += 'uuid = ' + experiment.uuid + '\n'
     content += 'name = ' + experiment.name + '\n'
     content += 'author = ' + experiment.author + '\n'
     content += 'date = ' + experiment.date + '\n'
-    content += 'rawdataset = ' + experiment.rawdataset_uri + '\n'
+    content += 'rawdataset = ' + '\n'
+    content += '\t{\n'
+    content += '\t\tname: ' + experiment.rawdataset.name + ',\n'
+    content += '\t\tuuid: ' + experiment.rawdataset.uuid + ',\n'
+    content += '\t\turl: ' + experiment.rawdataset.url + ',\n'
+    content += '\t}\n'
     content += 'processeddatasets = [ \n'
-    for dataset in experiment.processeddatasets_uris:
-        content += '\t' + dataset + '\n'
+    for dataset in experiment.processeddatasets:
+        content += '\t{\n'
+        content += '\t\tname: ' + dataset.name + ',\n'
+        content += '\t\tuuid: ' + dataset.uuid + ',\n'
+        content += '\t\turl: ' + dataset.url + ',\n'
+        content += '\t}\n'
     content += '] \n'
     content += 'tags = [ \n'
     for tag in experiment.tag_keys:

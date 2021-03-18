@@ -12,10 +12,11 @@ LocalRequest
 import os
 import json
 from shutil import copyfile
+import uuid
 
 from .utils import SciXtracerError
 from .containers import (METADATA_TYPE_RAW, METADATA_TYPE_PROCESSED, RawData,
-                         ProcessedData, Dataset,
+                         ProcessedData, Dataset, DatasetInfo, Container,
                          Experiment, Run, ProcessedDataInputContainer,
                          RunInputContainer, RunParameterContainer)
 
@@ -37,6 +38,10 @@ class LocalRequestService:
 
     def __init__(self):
         self.service_name = 'LocalMetadataService'
+
+    @staticmethod
+    def _generate_uuid():
+        return str(uuid.uuid4())
 
     @staticmethod
     def _read_json(md_uri: str):
@@ -213,6 +218,7 @@ class LocalRequestService:
         if tag_keys is None:
             tag_keys = []
         container = Experiment()
+        container.uuid = self._generate_uuid()
         container.name = name
         container.author = author
         container.date = date
@@ -242,7 +248,6 @@ class LocalRequestService:
         # create an empty raw dataset
         rawdata_path = os.path.join(experiment_path, 'data')
         rawdataset_md_url = os.path.join(rawdata_path, 'rawdataset.md.json')
-        container.rawdataset = rawdataset_md_url
         if os.path.exists(experiment_path):
             os.mkdir(rawdata_path)
         else:
@@ -252,9 +257,12 @@ class LocalRequestService:
             )
 
         rawdataset = Dataset()
+        rawdataset.uuid = self._generate_uuid()
         rawdataset.md_uri = rawdataset_md_url
         rawdataset.name = 'data'
         self.update_dataset(rawdataset)
+        container.rawdataset = DatasetInfo(rawdataset.name, rawdataset_md_url,
+                                           rawdataset.uuid)
 
         # save the experiment.md.json metadata file
         container.md_uri = os.path.join(experiment_path, 'experiment.md.json')
@@ -280,18 +288,27 @@ class LocalRequestService:
         if os.path.isfile(md_uri):
             metadata = self._read_json(md_uri)
             container = Experiment()
+            container.uuid = metadata['uuid']
             container.md_uri = md_uri
             container.name = metadata['information']['name']
             container.author = metadata['information']['author']
             container.date = metadata['information']['date']
-            container.rawdataset = LocalRequestService.absolute_path(
-                LocalRequestService.normalize_path_sep(metadata['rawdataset']),
-                md_uri)
+
+            rawdataset_url = LocalRequestService.absolute_path(
+                LocalRequestService.normalize_path_sep(
+                    metadata['rawdataset']['url']), md_uri)
+            container.rawdataset = DatasetInfo(metadata['rawdataset']['name'],
+                                               rawdataset_url,
+                                               metadata['rawdataset']['uuid'])
             for dataset in metadata['processeddatasets']:
-                container.processeddatasets_uris.append(
-                    LocalRequestService.absolute_path(
-                        LocalRequestService.normalize_path_sep(dataset),
-                        md_uri))
+                processeddataset_url = LocalRequestService.absolute_path(
+                    LocalRequestService.normalize_path_sep(
+                        dataset['url']), md_uri)
+
+                container.processeddatasets.append(
+                    DatasetInfo(dataset['name'],
+                                processeddataset_url,
+                                dataset['uuid']))
             for tag in metadata['tags']:
                 container.tag_keys.append(tag)
             return container
@@ -309,18 +326,26 @@ class LocalRequestService:
 
         md_uri: str = os.path.abspath(experiment.md_uri)
         metadata = dict()
+        metadata['uuid'] = experiment.uuid
         metadata['information'] = {}
         metadata['information']['name'] = experiment.name
         metadata['information']['author'] = experiment.author
         metadata['information']['date'] = experiment.date
-        metadata['rawdataset'] = LocalRequestService.to_unix_path(
-            LocalRequestService.relative_path(experiment.rawdataset_uri,
+
+        tmp_url = LocalRequestService.to_unix_path(
+            LocalRequestService.relative_path(experiment.rawdataset.url,
                                               md_uri))
+        metadata['rawdataset'] = {"name": experiment.rawdataset.name,
+                                  "url": tmp_url,
+                                  "uuid": experiment.rawdataset.uuid}
         metadata['processeddatasets'] = []
-        for dataset in experiment.processeddatasets_uris:
+        for dataset in experiment.processeddatasets:
+            tmp_url = LocalRequestService.to_unix_path(
+                          LocalRequestService.relative_path(dataset.url,
+                                                            md_uri))
             metadata['processeddatasets'].append(
-                LocalRequestService.to_unix_path(
-                    LocalRequestService.relative_path(dataset, md_uri)))
+                {"name": dataset.name, "url": tmp_url, "uuid": dataset.uuid}
+                )
         metadata['tags'] = []
         for tag in experiment.tag_keys:
             metadata['tags'].append(tag)
@@ -358,7 +383,7 @@ class LocalRequestService:
 
         """
 
-        rawdataset_uri = os.path.abspath(experiment.rawdataset_uri)
+        rawdataset_uri = os.path.abspath(experiment.rawdataset.url)
         data_dir_path = os.path.dirname(rawdataset_uri)
 
         # create the new data uri
@@ -369,6 +394,7 @@ class LocalRequestService:
 
         # create the container
         metadata = RawData()
+        metadata.uuid = self._generate_uuid()
         metadata.md_uri = md_uri
         metadata.name = name
         metadata.author = author
@@ -387,7 +413,8 @@ class LocalRequestService:
 
         # add data to experiment RawDataSet
         rawdataset_container = self.get_dataset(rawdataset_uri)
-        rawdataset_container.uris.append(md_uri)
+        raw_c = Container(md_uri=metadata.md_uri, uuid=metadata.uuid)
+        rawdataset_container.uris.append(raw_c)
         self.update_dataset(rawdataset_container)
 
         return md_uri
@@ -409,6 +436,7 @@ class LocalRequestService:
         if os.path.isfile(md_uri) and md_uri.endswith('.md.json'):
             metadata = LocalRequestService._read_json(md_uri)
             container = RawData()
+            container.uuid = metadata['uuid']
             container.md_uri = md_uri
             container.type = metadata['origin']['type']
             container.name = metadata['common']['name']
@@ -436,7 +464,7 @@ class LocalRequestService:
 
         md_uri = os.path.abspath(rawdata.md_uri)
         metadata = dict()
-
+        metadata['uuid'] = rawdata.uuid
         metadata['origin'] = dict()
         metadata['origin']['type'] = METADATA_TYPE_RAW()
 
@@ -471,6 +499,7 @@ class LocalRequestService:
         if os.path.isfile(md_uri) and md_uri.endswith('.md.json'):
             metadata = self._read_json(md_uri)
             container = ProcessedData()
+            container.uuid = metadata['uuid']
             container.md_uri = md_uri
             container.name = metadata['common']['name']
             container.author = metadata['common']['author']
@@ -515,6 +544,7 @@ class LocalRequestService:
 
         md_uri = os.path.abspath(processeddata.md_uri)
         metadata = dict()
+        metadata['uuid'] = processeddata.uuid
         # common
         metadata['common'] = dict()
         metadata['common']['name'] = processeddata.name
@@ -565,12 +595,15 @@ class LocalRequestService:
         if os.path.isfile(md_uri) and md_uri.endswith('.md.json'):
             metadata = self._read_json(md_uri)
             container = Dataset()
+            container.uuid = metadata["uuid"]
             container.md_uri = md_uri
             container.name = metadata['name']
             for uri in metadata['urls']:
                 container.uris.append(
-                    LocalRequestService.absolute_path(
-                        LocalRequestService.normalize_path_sep(uri), md_uri))
+                    Container(LocalRequestService.absolute_path(
+                        LocalRequestService.normalize_path_sep(uri['url']),
+                        md_uri)),
+                    uri['uuid'],)
 
             return container
         raise SciXtracerError('Dataset not found')
@@ -586,11 +619,13 @@ class LocalRequestService:
 
         md_uri = os.path.abspath(dataset.md_uri)
         metadata = dict()
+        metadata['uuid'] = dataset.uuid
         metadata['name'] = dataset.name
         metadata['urls'] = list()
         for uri in dataset.uris:
-            metadata['urls'].append(LocalRequestService.to_unix_path(
-                LocalRequestService.relative_path(uri, md_uri)))
+            tmp_url = LocalRequestService.to_unix_path(
+                LocalRequestService.relative_path(uri.md_uri, md_uri))
+            metadata['urls'].append({"uuid": uri.uuid, 'url': tmp_url})
         self._write_json(metadata, md_uri)
 
     def create_dataset(self, experiment, dataset_name):
@@ -619,16 +654,16 @@ class LocalRequestService:
             experiment_dir, dataset_name, 'processeddataset.md.json'
         )
         container = Dataset()
+        container.uuid = self._generate_uuid()
         container.md_uri = processeddataset_uri
         container.name = dataset_name
         self.update_dataset(container)
 
-        print("experiment at:", experiment_md_uri)
-        print("create the processed dataset at:", processeddataset_uri)
-
         # add the dataset to the experiment
-        experiment.processeddatasets_uris.append(
-            LocalRequestService.to_unix_path(processeddataset_uri))
+        tmp_url = LocalRequestService.to_unix_path(processeddataset_uri)
+        experiment.processeddatasets.append(
+            DatasetInfo(dataset_name, tmp_url, container.uuid)
+            )
         self.update_experiment(experiment)
 
         return container
@@ -660,6 +695,7 @@ class LocalRequestService:
         run_uri = os.path.join(dataset_dir, run_md_file_name)
 
         # write run
+        run_info.uuid = self._generate_uuid()
         run_info.md_uri = run_uri
         self._write_run(run_info)
         return run_info
@@ -681,6 +717,7 @@ class LocalRequestService:
         if os.path.isfile(md_uri):
             metadata = self._read_json(md_uri)
             container = Run()
+            container.uuid = metadata['uuid']
             container.md_uri = md_uri
             container.process_name = metadata['process']['name']
             container.process_uri = LocalRequestService.normalize_path_sep(
@@ -711,6 +748,7 @@ class LocalRequestService:
         """
 
         metadata = dict()
+        metadata['uuid'] = run.uuid
 
         metadata['process'] = {}
         metadata['process']['name'] = run.process_name
@@ -757,6 +795,7 @@ class LocalRequestService:
         # create the data metadata
         data_md_file = os.path.join(dataset_dir, processed_data.name
                                     + '.md.json')
+        processed_data.uuid = self._generate_uuid()
         processed_data.md_uri = data_md_file
         processed_data.uri = os.path.join(dataset_dir, processed_data.name + '.'
                                           + processed_data.format)
