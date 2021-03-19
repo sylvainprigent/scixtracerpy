@@ -12,15 +12,17 @@ class SearchContainer:
     ----------
     data
         Data are stored in dict as
-            data['name] = 'file.tif'
-            data['uri] = '/url/of/the/metadata/file.md.json'
-            data['tags] = {'tag1'='value1', 'tag2'='value2'}
+            data['name'] = 'file.tif'
+            data['uuid'] = 'hkamocnna-cinlncdce-flndcdsa223'
+            data['uri'] = '/url/of/the/metadata/file.md.json'
+            data['tags'] = {'tag1'='value1', 'tag2'='value2'}
     """
 
     def __init__(self):
         self.data = dict()
         self.data['name'] = ''
         self.data['uri'] = ''
+        self.data['uuid'] = ''
         self.data['tags'] = {}
 
     def uri(self):
@@ -31,6 +33,10 @@ class SearchContainer:
     def set_uri(self, uri: str):
         """Set the data metadata file uri"""
         self.data['uri'] = uri
+
+    def set_uuid(self, uuid: str):
+        """Set the data metadata file uuid"""
+        self.data['uuid'] = uuid
 
     def set_name(self, name: str):
         self.data['name'] = name

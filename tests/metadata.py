@@ -34,10 +34,12 @@ def create_processed_data() -> ProcessedData:
         'tests', 'test_metadata_local', 'process1', 'population1_001_o.tif'))
     processed_data_container2.format = 'tif'
     processed_data_container2.type = METADATA_TYPE_PROCESSED()
-    processed_data_container2.run_uri = os.path.abspath(os.path.join(
-        'tests', 'test_metadata_local', 'process1', 'run.md.json'))
+    processed_data_container2.run = Container(os.path.abspath(os.path.join(
+        'tests', 'test_metadata_local', 'process1', 'run.md.json')),
+        "fake_uuid")
     processed_data_container2.add_input('i', os.path.abspath(os.path.join(
         'tests', 'test_metadata_local', 'data', 'population1_001.md.json')),
+                                        "fake_uuid",
                                         METADATA_TYPE_RAW())
     processed_data_container2.set_output('o', 'Denoised image')
     return processed_data_container2
@@ -45,6 +47,7 @@ def create_processed_data() -> ProcessedData:
 
 def create_dataset() -> Dataset:
     container = Dataset()
+    container.uuid = "fake_uuid"
     container.name = 'data'
 
     d1_url = os.path.abspath(os.path.join(

@@ -87,6 +87,9 @@ class RawData(Data):
         Data.__init__(self)
         self.tags = dict()
 
+    def set_tag(self, key, value):
+        self.tags[key] = value
+
 
 class ProcessedDataInputContainer:
     """Container for processed data origin input
@@ -99,10 +102,11 @@ class ProcessedDataInputContainer:
         The uri of the input metadata
     """
 
-    def __init__(self, name: str = '', uri: str = '',
+    def __init__(self, name: str = '', uri: str = '', uuid: str = '',
                  type_: str = METADATA_TYPE_RAW()):
         self.name = name
         self.uri = uri
+        self.uuid = uuid
         self.type = type_
 
 
@@ -129,8 +133,8 @@ class ProcessedData(Data):
         self.inputs = list()
         self.output = dict()
 
-    def add_input(self, name: str, uri: str, type_: str):
-        self.inputs.append(ProcessedDataInputContainer(name, uri, type_))
+    def add_input(self, name: str, uri: str, uuid: str, type_: str):
+        self.inputs.append(ProcessedDataInputContainer(name, uri, uuid, type_))
 
     def set_output(self, name: str, label: str):
         self.output = {'name': name, 'label': label}
@@ -270,3 +274,7 @@ class Experiment(Container):
         self.rawdataset = None  # DatasetInfo
         self.processeddatasets = []  # list of DatasetInfo
         self.tag_keys = []
+
+    def set_tag_key(self, key):
+        if key not in self.tag_keys:
+            self.tag_keys.append(key)

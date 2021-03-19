@@ -11,18 +11,19 @@ Request
 
 import os
 import re
-from .utils import SciXtracerError, format_date
+from .utils import Observable, SciXtracerError, format_date
 from .factory import requestServices
 from .containers import (Experiment, RawData, ProcessedData, Dataset,
                          METADATA_TYPE_RAW)
 from .query import SearchContainer, query_list_single
 
 
-class Request:
+class Request(Observable):
     """Implements the requests to the database
 
     """
     def __init__(self):
+        Observable.__init__(self)
         self.service = requestServices.get("LOCAL")
 
     def create_experiment(self, name, author, date='now', tag_keys=[],
@@ -111,8 +112,8 @@ class Request:
 
         """
 
-        self.service.import_data(experiment, data_path, name, author, format_,
-                                 format_date(date), tags, copy)
+        return self.service.import_data(experiment, data_path, name, author,
+                                        format_, format_date(date), tags, copy)
 
     def import_dir(self, experiment, dir_uri, filter_, author, format_, date,
                    copy_data):
@@ -148,12 +149,12 @@ class Request:
         count = 0
         for file in files:
             count += 1
-        r1 = re.compile(filter_)  # re.compile(r'\.tif$')
-        if r1.search(file):
-            self.notify_observers(int(100 * count / len(files)), file)
-        data_url = os.path.join(dir_uri, file)
-        self.import_data(experiment, data_url, file, author, format_, date, {},
-                         copy_data)
+            r1 = re.compile(filter_)  # re.compile(r'\.tif$')
+            if r1.search(file):
+                self.notify_observers(int(100 * count / len(files)), file)
+                data_url = os.path.join(dir_uri, file)
+                self.import_data(experiment, data_url, file, author, format_,
+                                 date, {}, copy_data)
 
     def tag_from_name(self, experiment, tag, values):
         """Tag an experiment raw data using raw data file names
@@ -168,11 +169,11 @@ class Request:
             List of possible values (str) for the tag to find in the filename
         """
 
-        experiment.set_tag(tag, False)
+        experiment.set_tag_key(tag)
         self.update_experiment(experiment)
         _rawdataset = self.get_rawdataset(experiment)
         for uri in _rawdataset.uris:
-            _rawdata = self.get_rawdata(uri)
+            _rawdata = self.get_rawdata(uri.md_uri)
             for value in values:
                 if value in _rawdata.name:
                     _rawdata.set_tag(tag, value)
@@ -194,11 +195,11 @@ class Request:
             Position of the value to extract with respect to the separators
         """
 
-        experiment.set_tag(tag, False)
+        experiment.set_tag_key(tag)
         self.update_experiment(experiment)
         _rawdataset = self.get_rawdataset(experiment)
         for uri in _rawdataset.uris:
-            _rawdata = self.get_rawdata(uri)
+            _rawdata = self.get_rawdata(uri.md_uri)
             basename = os.path.splitext(os.path.basename(_rawdata.uri))[0]
             splited_name = basename.split(separator)
             value = ''
@@ -257,7 +258,7 @@ class Request:
             Container with the processeddata metadata
         """
 
-        self.service.update_rawdata(processeddata)
+        self.service.update_processeddata(processeddata)
 
     def get_dataset_from_uri(self, uri):
         """Read a dataset from the database using it URI
@@ -298,7 +299,7 @@ class Request:
         Dataset object containing the dataset metadata
 
         """
-        return self.get_dataset_from_uri(experiment.rawdataset_uri)
+        return self.get_dataset_from_uri(experiment.rawdataset.url)
 
     def get_parent(self, processeddata):
         """Get the metadata of the parent data.
@@ -365,10 +366,10 @@ class Request:
         """
 
         if name == 'data':
-            return self.get_dataset_from_uri(experiment.rawdataset_uri)
+            return self.get_dataset_from_uri(experiment.rawdataset.url)
         else:
             for dataset_name in experiment.processeddatasets:
-                pdataset = self.get_dataset_from_uri(dataset_name)
+                pdataset = self.get_dataset_from_uri(dataset_name.url)
                 if pdataset.name == name:
                     return pdataset
         return None
@@ -399,18 +400,24 @@ class Request:
         queries = re.split(' AND ', query)
 
         # initially all the raw data are selected
-        first_data = self.get_rawdata(dataset.uris[0])
+        first_data = self.get_rawdata(dataset.uris[0].md_uri)
         selected_list = []
         # raw dataset
-        if first_data.origin == METADATA_TYPE_RAW():
-            selected_list = self._rawdata_to_search_containers()
+        if dataset.name == 'data':
+            for data_info in dataset.uris:
+                data_container = self.get_rawdata(data_info.url)
+                selected_list.append(self._rawdata_to_search_container(
+                    data_container))
         # processed dataset
         else:
-            pre_list = self._processed_data_to_search_container()
+            pre_list = []
+            for data_info in dataset.uris:
+                p_con = self.get_processeddata(data_info.md_uri)
+                pre_list.append(self._processed_data_to_search_container(p_con))
             # remove the data where output origin is not the asked one
             if origin_output_name != '':
                 for pdata in pre_list:
-                    data = self.get_processeddata(pdata.uri)
+                    data = self.get_processeddata(pdata.uri())
                     if data.output["name"] == origin_output_name:
                         selected_list.append(pdata)
             else:
@@ -426,7 +433,10 @@ class Request:
         # convert SearchContainer list to uri list
         out = []
         for d in selected_list:
-            out.append(d.uri())
+            if dataset.name == 'data':
+                out.append(self.get_rawdata(d.uri()))
+            else:
+                out.append(self.get_processeddata(d.uri()))
         return out
 
     def create_dataset(self, experiment, dataset_name):
@@ -540,6 +550,7 @@ class Request:
                 container = SearchContainer()
         except SciXtracerError:
             container = SearchContainer()
-        container.data['name'] = self.name
-        container.data['uri'] = self.md_uri
+        container.data['name'] = processeddata.name
+        container.data['uri'] = processeddata.md_uri
+        container.data['uuid'] = processeddata.uuid
         return container

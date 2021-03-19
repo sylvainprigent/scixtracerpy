@@ -96,10 +96,13 @@ def serialize_dataset(dataset):
 
     content = 'Dataset:\n'
     content += 'name = ' + dataset.name
-    content += 'uris = \n'
+    content += 'uris = [\n'
     for uri in dataset.uris:
-        content += '\t' + uri
-    content += '\n'
+        content += '\t{\n'
+        content += '\t\tuuid: ' + uri.uuid + ',\n'
+        content += '\t\turl: ' + uri.md_uri + ',\n'
+        content += '\t}\n'
+    content += ']\n'
     return content
 
 

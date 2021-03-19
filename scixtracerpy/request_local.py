@@ -417,7 +417,12 @@ class LocalRequestService:
         rawdataset_container.uris.append(raw_c)
         self.update_dataset(rawdataset_container)
 
-        return md_uri
+        # add tags keys to experiment
+        for key in tags:
+            experiment.set_tag_key(key)
+        self.update_experiment(experiment)
+
+        return metadata
 
     def get_rawdata(self, md_uri):
         """Read a raw data from the database
@@ -509,9 +514,10 @@ class LocalRequestService:
                 LocalRequestService.normalize_path_sep(
                     metadata['common']['url']), md_uri)
             # origin run
-            container.run_uri = LocalRequestService.absolute_path(
+            container.run = Container(LocalRequestService.absolute_path(
                 LocalRequestService.normalize_path_sep(
-                    metadata['origin']['runurl']), md_uri)
+                    metadata['origin']['run']["url"]), md_uri),
+                metadata['origin']['run']["uuid"])
             # origin input
             for input_ in metadata['origin']['inputs']:
                 container.inputs.append(
@@ -520,10 +526,11 @@ class LocalRequestService:
                         LocalRequestService.absolute_path(
                             LocalRequestService.normalize_path_sep(
                                 input_['url']), md_uri),
+                        input_['uuid'],
                         input_['type'],
                     )
                 )
-            # origin
+            # origin output
             if 'name' in metadata['origin']['output']:
                 container.output['name'] = metadata['origin']['output']["name"]
             if 'label' in metadata['origin']['output']:
@@ -557,8 +564,10 @@ class LocalRequestService:
         metadata['origin'] = dict()
         metadata['origin']['type'] = METADATA_TYPE_PROCESSED()
         # run url
-        metadata['origin']['runurl'] = LocalRequestService.to_unix_path(
-            LocalRequestService.relative_path(processeddata.run_uri, md_uri))
+        run_url = LocalRequestService.to_unix_path(
+            LocalRequestService.relative_path(processeddata.run.md_uri, md_uri))
+        metadata['origin']['run'] = {"url": run_url,
+                                     "uuid": processeddata.run.uuid}
         # origin inputs
         metadata['origin']['inputs'] = list()
         for input_ in processeddata.inputs:
@@ -567,6 +576,7 @@ class LocalRequestService:
                     'name': input_.name,
                     'url': LocalRequestService.to_unix_path(
                         LocalRequestService.relative_path(input_.uri, md_uri)),
+                    'uuid': input_.uuid,
                     'type': input_.type,
                 }
             )
@@ -602,8 +612,8 @@ class LocalRequestService:
                 container.uris.append(
                     Container(LocalRequestService.absolute_path(
                         LocalRequestService.normalize_path_sep(uri['url']),
-                        md_uri)),
-                    uri['uuid'],)
+                        md_uri),
+                        uri['uuid']))
 
             return container
         raise SciXtracerError('Dataset not found')
