@@ -400,7 +400,7 @@ class Request(Observable):
         queries = re.split(' AND ', query)
 
         # initially all the raw data are selected
-        first_data = self.get_rawdata(dataset.uris[0].md_uri)
+        #  first_data = self.get_rawdata(dataset.uris[0].md_uri)
         selected_list = []
         # raw dataset
         if dataset.name == 'data':
@@ -423,12 +423,10 @@ class Request(Observable):
             else:
                 selected_list = pre_list
 
-        if query == '':
-            return selected_list
-
         # run all the AND queries on the preselected dataset
-        for q in queries:
-            selected_list = query_list_single(selected_list, q)
+        if query != '':
+            for q in queries:
+                selected_list = query_list_single(selected_list, q)
 
         # convert SearchContainer list to uri list
         out = []
