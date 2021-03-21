@@ -405,7 +405,7 @@ class Request(Observable):
         # raw dataset
         if dataset.name == 'data':
             for data_info in dataset.uris:
-                data_container = self.get_rawdata(data_info.url)
+                data_container = self.get_rawdata(data_info.md_uri)
                 selected_list.append(self._rawdata_to_search_container(
                     data_container))
         # processed dataset
@@ -490,13 +490,15 @@ class Request(Observable):
 
         return self.service.get_run(uri)
 
-    def create_data(self, dataset, processed_data):
+    def create_data(self, dataset, run, processed_data):
         """Create a new processed data for a given dataset
 
         Parameters
         ----------
         dataset: Dataset
             Object of the dataset metadata
+        run: Run
+            Metadata of the run
         processed_data: ProcessedData
             Object containing the new processed data. md_uri is ignored and
             created automatically by this method
@@ -506,7 +508,7 @@ class Request(Observable):
         ProcessedData object with the metadata and the new created md_uri
         """
 
-        return self.service.create_data(dataset, processed_data)
+        return self.service.create_data(dataset, run, processed_data)
 
     @staticmethod
     def _rawdata_to_search_container(rawdata):

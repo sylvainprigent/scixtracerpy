@@ -15,6 +15,8 @@ Run
 
 """
 
+from .utils import format_date
+
 
 def METADATA_TYPE_RAW():
     """Type for matadata for raw data"""
@@ -71,6 +73,7 @@ class Data(Container):
         self.date = ''
         self.format = ''
         self.uri = ''
+        self.type = ''
 
 
 class RawData(Data):
@@ -86,6 +89,7 @@ class RawData(Data):
     def __init__(self):
         Data.__init__(self)
         self.tags = dict()
+        self.type = 'raw'
 
     def set_tag(self, key, value):
         self.tags[key] = value
@@ -129,15 +133,29 @@ class ProcessedData(Data):
 
     def __init__(self):
         Data.__init__(self)
-        self.run_uri = ''
+        self.run = None # Container
         self.inputs = list()
         self.output = dict()
+        self.type = 'processed'
 
-    def add_input(self, name: str, uri: str, uuid: str, type_: str):
-        self.inputs.append(ProcessedDataInputContainer(name, uri, uuid, type_))
+    def set_info(self, name='', author='', date='', format_='', url=''):
+        self.name = name
+        self.author = author
+        self.date = format_date(date)
+        self.format = format_
+        self.uri = url
 
-    def set_output(self, name: str, label: str):
-        self.output = {'name': name, 'label': label}
+    def add_input_(self, id: str, uri: str, uuid: str, type_: str):
+        self.inputs.append(ProcessedDataInputContainer(id, uri, uuid, type_))
+
+    def add_input(self, id: str, data: Data):
+        self.inputs.append(ProcessedDataInputContainer(id,
+                                                       data.md_uri,
+                                                       data.uuid,
+                                                       data.type))
+
+    def set_output(self, id: str, label: str):
+        self.output = {'name': id, 'label': label}
 
 
 class Dataset(Container):
@@ -226,6 +244,26 @@ class Run(Container):
         self.processeddataset = None  # Container
         self.parameters = []  # list of RunParameterContainer
         self.inputs = []  # list of RunInputContainer
+
+    def set_process(self, name, uri):
+        self.process_name = name
+        self.process_uri = uri
+
+    def set_dataset(self, dataset):
+        self.processeddataset = dataset
+
+    def add_parameter(self, name, value):
+        self.parameters.append(RunParameterContainer(name, value))
+
+    def add_input(
+            self,
+            name: str = '',
+            dataset: str = '',
+            query: str = '',
+            origin_output_name: str = '',
+    ):
+        self.inputs.append(RunInputContainer(name, dataset, query,
+                                             origin_output_name))
 
 
 class DatasetInfo:

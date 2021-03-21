@@ -67,7 +67,11 @@ def serialize_processeddata(processeddata):
 
     content = 'ProcessedData:\n'
     content += serialize_data(processeddata)
-    content += 'run_uri = ' + processeddata.run_uri + '\n'
+    content += 'run = \n'
+    content += '\t{\n'
+    content += '\t\tuuid: ' + processeddata.run.uuid + ',\n'
+    content += '\t\turl: ' + processeddata.run.md_uri + ',\n'
+    content += '\t}\n'
     content += 'inputs = [ \n'
     for input_ in processeddata.inputs:
         content += 'name:' + input_.name + ', uri:' + input_.uri + '\n'
@@ -162,8 +166,11 @@ def serialize_run(run):
     content += '{\n\t"process":{\n'
     content += '\t\t"name": "' + run.process_name + '",\n'
     content += '\t\t"uri": "' + run.process_uri + '"\n'
-    content += '\t}\n\t"processeddataset": "' + run.processeddataset + \
-               '",\n'
+    content += '\t}\n\t"processeddataset": \n'
+    content += '\t\t{\n'
+    content += '\t\t\t"uuid": "' + run.processeddataset.uuid + '",\n'
+    content += '\t\t\t"url": "' + run.processeddataset.md_uri + '"\n'
+    content += '\t\t},\n'
     content += '\t"parameters": [\n '
     for param in run.parameters:
         content += '\t\t{\n'

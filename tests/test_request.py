@@ -4,9 +4,10 @@ import os.path
 import filecmp
 import shutil
 
-from scixtracerpy import Request
+from scixtracerpy import Request, Run, ProcessedData
 from scixtracerpy.serialize import (serialize_experiment, serialize_rawdata,
-                                    serialize_processeddata, serialize_dataset)
+                                    serialize_processeddata, serialize_dataset,
+                                    serialize_run)
 from tests.metadata import (create_experiment, create_raw_data,
                             create_processed_data, create_dataset)
 
@@ -43,6 +44,10 @@ class TestRequest(unittest.TestCase):
         self.tst_dataset_file = \
             os.path.join('tests', 'test_metadata_local', 'data',
                          'rawdataset_tst.md.json')
+
+        self.ref_run_file = \
+            os.path.join('tests', 'test_metadata_local', 'process1',
+                         'run.md.json')
 
     def tearDown(self):
         if os.path.isfile(self.test_experiment_uri):
@@ -300,13 +305,101 @@ class TestRequest(unittest.TestCase):
         self.assertEqual(data[0].name, 'population1_001_o')
 
     def test_create_dataset(self):
-        self.assertTrue(True)
+        experiment = self.request.create_experiment("myexperiment", "sprigent",
+                                                    date='now', tag_keys=[],
+                                                    destination=self.test_experiment_dir)
+
+        self.request.create_dataset(experiment, "myprocess")
+
+        t1 = False
+        dataset_file = os.path.join(self.test_experiment_dir, "myexperiment",
+                                    "myprocess", "processeddataset.md.json")
+        if os.path.isfile(dataset_file):
+            t1 = True
+
+        t2 = False
+        dataset = self.request.get_dataset(experiment, "myprocess")
+        if dataset.name == "myprocess":
+            t2 = True
+        self.assertTrue(t1*t2)
 
     def test_create_run(self):
-        self.assertTrue(True)
+        experiment = self.request.create_experiment("myexperiment", "sprigent",
+                                                    date='now', tag_keys=[],
+                                                    destination=self.test_experiment_dir)
+
+        dataset = self.request.create_dataset(experiment, "threshold")
+        run_info = Run()
+        run_info.set_process(name='threshold', uri='uniqueIdOfMyAlgorithm')
+        run_info.add_input(name='image', dataset='data',
+                           query="Population=Population1")
+        run_info.add_parameter('threshold', '100')
+        self.request.create_run(dataset, run_info)
+
+        t1 = False
+        run_file = os.path.join(self.test_experiment_dir, "myexperiment",
+                                "threshold", "run.md.json")
+        if os.path.isfile(run_file):
+            t1 = True
+
+        t2 = False
+        if run_info.process_name == "threshold":
+            t2 = True
+
+        self.assertTrue(t1*t2)
 
     def test_get_run(self):
-        self.assertTrue(True)
+        run = self.request.get_run(self.ref_run_file)
+        t1 = False
+        if run.process_name == "SPARTION 2D":
+            t1 = True
+        t2 = False
+        if run.processeddataset.uuid == "fake_uuid":
+            t2 = True
+        self.assertTrue(t1*t2)
 
     def test_create_data(self):
-        self.assertTrue(True)
+        experiment = self.request.create_experiment("myexperiment", "sprigent",
+                                                    date='now', tag_keys=[],
+                                                    destination=self.test_experiment_dir)
+        self.request.import_dir(experiment, self.test_import_dir,
+                                filter_=r'\.tif$', author='sprigent',
+                                format_='tif', date='now', copy_data=True)
+
+        raw_dataset = self.request.get_dataset(experiment, "data")
+
+        raw_data = self.request.get_data(raw_dataset, query="name=population1_001")[0]
+
+        dataset = self.request.create_dataset(experiment, "threshold")
+        run_info = Run()
+        run_info.set_process(name='threshold', uri='uniqueIdOfMyAlgorithm')
+        run_info.add_input(name='image', dataset='data',
+                           query="Population=Population1")
+        run_info.add_parameter('threshold', '100')
+        self.request.create_run(dataset, run_info)
+        processed_data = ProcessedData()
+        output_image_path = os.path.abspath(os.path.join(
+                                         self.test_experiment_dir,
+                                         "myexperiment", "threshold",
+                                         "o_"+raw_data.name+'.tif'))
+        processed_data.set_info(name="myimage", author="sprigent", date='now',
+                                format_="tif", url=output_image_path)
+        processed_data.add_input(id="i", data=raw_data)
+        processed_data.set_output(id="o", label="threshold")
+
+        self.request.create_data(dataset, run_info, processed_data)
+
+        t1 = False
+        if os.path.isfile(processed_data.md_uri):
+            t1 = True
+        t2 = False
+
+        if processed_data.name == "myimage":
+            t2 = True
+        t3 = False
+        if "o_population1_001.tif.tif" in processed_data.uri:
+            t3 = True
+        t4 = False
+        if "run.md.json" in processed_data.run.md_uri:
+            t4 = True
+        self.assertTrue(t1*t2*t3*t4)

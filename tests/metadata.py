@@ -37,7 +37,7 @@ def create_processed_data() -> ProcessedData:
     processed_data_container2.run = Container(os.path.abspath(os.path.join(
         'tests', 'test_metadata_local', 'process1', 'run.md.json')),
         "fake_uuid")
-    processed_data_container2.add_input('i', os.path.abspath(os.path.join(
+    processed_data_container2.add_input_('i', os.path.abspath(os.path.join(
         'tests', 'test_metadata_local', 'data', 'population1_001.md.json')),
                                         "fake_uuid",
                                         METADATA_TYPE_RAW())

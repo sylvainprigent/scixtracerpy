@@ -705,6 +705,7 @@ class LocalRequestService:
         run_uri = os.path.join(dataset_dir, run_md_file_name)
 
         # write run
+        run_info.processeddataset = dataset
         run_info.uuid = self._generate_uuid()
         run_info.md_uri = run_uri
         self._write_run(run_info)
@@ -732,7 +733,13 @@ class LocalRequestService:
             container.process_name = metadata['process']['name']
             container.process_uri = LocalRequestService.normalize_path_sep(
                 metadata['process']['url'])
-            container.processeddataset = metadata['processeddataset']
+            container.processeddataset = Container(
+                LocalRequestService.absolute_path(
+                    LocalRequestService.normalize_path_sep(
+                        metadata['processeddataset']['url']),
+                    md_uri),
+                metadata['processeddataset']['uuid']
+            )
             for input_ in metadata['inputs']:
                 container.inputs.append(
                     RunInputContainer(
@@ -764,7 +771,11 @@ class LocalRequestService:
         metadata['process']['name'] = run.process_name
         metadata['process']['url'] = LocalRequestService.to_unix_path(
             run.process_uri)
-        metadata['processeddataset'] = run.processeddataset
+        dataset_rel_url = LocalRequestService.to_unix_path(
+            LocalRequestService.relative_path(run.processeddataset.md_uri,
+                                              run.md_uri))
+        metadata['processeddataset'] = {"uuid": run.processeddataset.uuid,
+                                        "url": dataset_rel_url}
         metadata['inputs'] = []
         for input_ in run.inputs:
             metadata['inputs'].append(
@@ -783,13 +794,15 @@ class LocalRequestService:
 
         self._write_json(metadata, run.md_uri)
 
-    def create_data(self, dataset, processed_data):
+    def create_data(self, dataset, run, processed_data):
         """Create a new processed data for a given dataset
 
         Parameters
         ----------
         dataset: Dataset
             Object of the dataset metadata
+        run: Run
+            Metadata of the run
         processed_data: ProcessedData
             Object containing the new processed data. md_uri is ignored and
             created automatically by this method
@@ -807,10 +820,11 @@ class LocalRequestService:
                                     + '.md.json')
         processed_data.uuid = self._generate_uuid()
         processed_data.md_uri = data_md_file
-        processed_data.uri = os.path.join(dataset_dir, processed_data.name + '.'
-                                          + processed_data.format)
+
+        processed_data.run = run
+
         self.update_processeddata(processed_data)
 
         # add the data to the dataset
-        dataset.uris.append(data_md_file)
+        dataset.uris.append(Container(data_md_file, processed_data.uuid))
         self.update_dataset(dataset)
