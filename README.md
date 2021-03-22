@@ -1,9 +1,11 @@
 
 # SciXtracerPy
 
-Python implementation of the scientific experiment data management system calles SciXtracer
+Python implementation of the scientific experiment data management system called SciXtracer
 
 # Documentation
+
+The demo script ``demo.py`` shows a basic usage of the library
 
 The documentation is available [here](https://sylvainprigent.github.io/scixtracer).
 
@@ -28,10 +30,3 @@ cd docs
 pipenv run sphinx-build -b html ./source ./build
 ```
 
-## Generate the requirements.txt
-
-The `requirements.txt` file is generated from Pipenv with:
-
-```bash
-pipenv lock --requirements > requirements.txt
-```
