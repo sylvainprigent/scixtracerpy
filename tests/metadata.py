@@ -1,12 +1,12 @@
 import os
-from scixtracerpy.containers import (METADATA_TYPE_RAW,
-                                     METADATA_TYPE_PROCESSED,
-                                     Container,
-                                     RawData,
-                                     ProcessedData,
-                                     Dataset,
-                                     DatasetInfo,
-                                     Experiment)
+from scixtracer.containers import (METADATA_TYPE_RAW,
+                                   METADATA_TYPE_PROCESSED,
+                                   Container,
+                                   RawData,
+                                   ProcessedData,
+                                   Dataset,
+                                   DatasetInfo,
+                                   Experiment)
 
 
 def create_raw_data() -> RawData:

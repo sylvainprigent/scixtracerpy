@@ -2,7 +2,7 @@ import os
 import numpy as np
 from skimage import io, restoration, transform
 
-import scixtracerpy as sx
+import scixtracer as sx
 
 # First we connect to the database (here it is a local database)
 req = sx.Request()

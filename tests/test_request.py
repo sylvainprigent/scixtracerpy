@@ -4,10 +4,10 @@ import os.path
 import filecmp
 import shutil
 
-from scixtracerpy import Request, Run, ProcessedData
-from scixtracerpy.serialize import (serialize_experiment, serialize_rawdata,
-                                    serialize_processeddata, serialize_dataset,
-                                    serialize_run)
+from scixtracer import Request, Run, ProcessedData
+from scixtracer.serialize import (serialize_experiment, serialize_rawdata,
+                                  serialize_processeddata, serialize_dataset,
+                                  serialize_run)
 from tests.metadata import (create_experiment, create_raw_data,
                             create_processed_data, create_dataset)
 

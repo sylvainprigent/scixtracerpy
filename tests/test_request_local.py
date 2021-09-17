@@ -2,7 +2,7 @@ import unittest
 import os
 import os.path
 
-from scixtracerpy.request_local import (LocalRequestService)
+from scixtracer.request_local import (LocalRequestService)
 
 
 class TestRequestLocalFunctions(unittest.TestCase):

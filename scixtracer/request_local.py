@@ -119,7 +119,7 @@ class LocalRequestService:
             File to get absolute path
         Returns
         -------
-        relative path of uri wrt md_uri
+        absolute path of file
         """
         if os.path.isfile(file):
             return os.path.abspath(file)
@@ -828,3 +828,5 @@ class LocalRequestService:
         # add the data to the dataset
         dataset.uris.append(Container(data_md_file, processed_data.uuid))
         self.update_dataset(dataset)
+
+        return processed_data
