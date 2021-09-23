@@ -174,6 +174,9 @@ class Dataset(Container):
         self.name = ''
         self.uris = list()  # list of containers
 
+    def size(self):
+        return len(self.uris)
+
 
 class RunParameterContainer:
     """Container for a run parameter

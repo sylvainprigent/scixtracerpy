@@ -80,6 +80,22 @@ class Request(Observable):
 
         self.service.update_experiment(experiment)
 
+    def set_tag_key(self, experiment, key):
+        """Set a new tag key to the experiment
+
+        The experiment is automatically updated when a tag key is changed
+
+        Parameters
+        ----------
+        experiment: Experiment
+            Container of the experiment metadata
+        key: str
+            Tag key to set
+
+        """
+        experiment.set_tag_key(key)
+        self.service.update_experiment(experiment)
+
     def import_data(self, experiment, data_path, name, author, format_,
                     date='now', tags=dict, copy=True):
         """import one data to the experiment

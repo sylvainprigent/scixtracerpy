@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from skimage import io, restoration, transform
+from skimage import io, restoration, exposure
 
 import scixtracer as sx
 
@@ -59,8 +59,8 @@ for data in data_list:
     req.create_data(processed_dataset, run_info, processed_data)
 
     # run the Wiener deconvolution
-    img = io.imread(data.uri)
+    img = np.float32(io.imread(data.uri))
     psf = np.ones((2, 2)) / 4
-    img_rescaled = transform.rescale(img, 0.5)
+    img_rescaled = exposure.rescale_intensity(img)
     out_img = restoration.wiener(img_rescaled, psf, regularization)
     io.imsave(out_file, out_img)
