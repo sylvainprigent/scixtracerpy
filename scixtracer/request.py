@@ -26,6 +26,13 @@ class Request(Observable):
         Observable.__init__(self)
         self.service = requestServices.get("LOCAL")
 
+
+    def experiments(self, workspace_uri):
+        """Get the list of experiments"""
+        #workspace_dir = ConfigAccess.instance().config['workspace']
+        return self.service.workspace_experiments(workspace_uri)
+
+
     def create_experiment(self, name, author, date='now', tag_keys=[],
                           destination=''):
         """Create a new experiment
@@ -94,6 +101,22 @@ class Request(Observable):
 
         """
         experiment.set_tag_key(key)
+        self.service.update_experiment(experiment)
+
+    def set_tag_keys(self, experiment, keys):
+        """Set tag keys to the experiment
+
+        The experiment is automatically updated when the tag keys are changed
+
+        Parameters
+        ----------
+        experiment: Experiment
+            Container of the experiment metadata
+        keys: list
+            List of tag keys
+
+        """
+        experiment.tag_keys = keys
         self.service.update_experiment(experiment)
 
     def import_data(self, experiment, data_path, name, author, format_,
